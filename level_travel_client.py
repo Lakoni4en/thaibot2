@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import List
 
 import httpx
@@ -58,71 +58,80 @@ class LevelTravelClient:
     async def search_tours(self) -> List[Tour]:
         """
         Ищет прямые перелёты Москва → Паттайя (UTP) на весь март 2026 года.
-        Travelpayouts возвращает цены по датам вылета, мы дополнительно
-        фильтруем по длительности пребывания (ночей) и прямым рейсам.
+        Travelpayouts возвращает цены по конкретной дате вылета, поэтому
+        перебираем все дни месяца и агрегируем результаты.
         """
 
         date_from = date(2026, 3, 1)
         date_to = date(2026, 3, 31)
 
-        params = {
-            "origin": "MOW",  # Москва
-            "destination": "UTP",  # U-Tapao (Паттайя)
-            "departure_at": f"{date_from:%Y-%m-%d}:{date_to:%Y-%m-%d}",
-            "one_way": "false",
-            "direct": "true" if self._config.direct_only else "false",
-            "limit": 30,
-            # Aviasales/Travelpayouts также принимает токен как query-параметр `token`
-            "token": self._config.aviasales_token,
-        }
-
-        resp = await self._client.get(self.BASE_URL, params=params)
-        resp.raise_for_status()
-        raw = resp.json()
-
-        flights = raw.get("data", []) or []
         tours: List[Tour] = []
 
-        for f in flights:
-            try:
-                price = int(f.get("price", 0))
-                currency = raw.get("currency", "EUR")
+        current = date_from
+        while current <= date_to:
+            params = {
+                "origin": "MOW",  # Москва
+                "destination": "UTP",  # U-Tapao (Паттайя)
+                "departure_at": f"{current:%Y-%m-%d}",
+                "one_way": "false",
+                "direct": "true" if self._config.direct_only else "false",
+                "limit": 30,
+                "token": self._config.aviasales_token,
+            }
 
-                # Кол-во ночей в точке назначения
-                nights = int(f.get("nightsInDest", 0))
-                if not (self._config.min_nights <= nights <= self._config.max_nights):
-                    continue
+            resp = await self._client.get(self.BASE_URL, params=params)
+            resp.raise_for_status()
+            raw = resp.json()
 
-                # Маршрут (список сегментов)
-                route = f.get("route") or []
-                is_direct = len(route) == 1
-                if self._config.direct_only and not is_direct:
-                    continue
+            flights = raw.get("data", []) or []
 
-                city_from = f.get("cityFrom") or f.get("flyFrom") or "Москва"
-                city_to = f.get("cityTo") or f.get("flyTo") or "Паттайя"
-                local_departure = f.get("local_departure", "")[:10]  # YYYY-MM-DD
+            for f in flights:
+                try:
+                    # Цена
+                    price = int(f.get("value", 0))
+                    currency = "RUB"
 
-                airlines = {seg.get("airline", "") for seg in route}
-                airlines_str = ", ".join(sorted(a for a in airlines if a)) or "авиакомпания"
+                    depart_date_str = f.get("depart_date")
+                    return_at_str = f.get("return_at")  # формат YYYY-MM-DDTHH:MM:SSZ
+                    if not depart_date_str or not return_at_str:
+                        continue
 
-                title = f"{city_from} → {city_to} ({airlines_str})"
+                    depart_d = date.fromisoformat(depart_date_str)
+                    return_d = date.fromisoformat(return_at_str[:10])
+                    nights = (return_d - depart_d).days
+                    if nights <= 0:
+                        continue
 
-                deep_link = f.get("deep_link") or ""
+                    if not (self._config.min_nights <= nights <= self._config.max_nights):
+                        continue
 
-                tours.append(
-                    Tour(
-                        hotel_name=title,
-                        nights=nights,
-                        price=price,
-                        currency=currency,
-                        departure_date=local_departure,
-                        flight_is_direct=is_direct,
-                        url=deep_link,
+                    # Прямой рейс – без пересадок
+                    changes = int(f.get("number_of_changes", 0))
+                    is_direct = changes == 0
+                    if self._config.direct_only and not is_direct:
+                        continue
+
+                    origin = f.get("origin", "MOW")
+                    destination = f.get("destination", "UTP")
+
+                    title = f"{origin} → {destination}"
+                    link = f.get("link") or ""
+
+                    tours.append(
+                        Tour(
+                            hotel_name=title,
+                            nights=nights,
+                            price=price,
+                            currency=currency,
+                            departure_date=depart_date_str,
+                            flight_is_direct=is_direct,
+                            url=link,
+                        )
                     )
-                )
-            except Exception:
-                continue
+                except Exception:
+                    continue
+
+            current += timedelta(days=1)
 
         return tours
 
