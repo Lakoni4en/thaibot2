@@ -33,55 +33,50 @@ class Tour:
 
 class LevelTravelClient:
     """
-    Вместо Level Travel используем публичный API Kiwi (Skypicker).
+    Вместо Level Travel используем бесплатный партнёрский API Aviasales / Travelpayouts.
 
-    Документация (неофициальная, но общедоступная): `https://api.skypicker.com`.
-    Мы строим запрос вида:
-
-    https://api.skypicker.com/flights
-        ?fly_from=MOW
-        &fly_to=UTP
-        &date_from=01/03/2026
-        &date_to=31/03/2026
-        &nights_in_dst_from=10
-        &nights_in_dst_to=15
-        &direct_flights=1
-        &curr=RUB
-        &partner=picky
+    Документация: https://travelpayouts.github.io/slate/#prices_for_dates
+    Эндпоинт поиска: /aviasales/v3/prices_for_dates
+    Требуется токен AVIASALES_TOKEN (X-Access-Token).
     """
 
-    BASE_URL = "https://api.skypicker.com/flights"
+    BASE_URL = "https://api.travelpayouts.com/aviasales/v3/prices_for_dates"
 
     def __init__(self, config: BotConfig) -> None:
         self._config = config
-        self._client = httpx.AsyncClient(timeout=30)
+        self._client = httpx.AsyncClient(
+            timeout=30,
+            headers={
+                "accept": "application/json",
+                "X-Access-Token": config.aviasales_token,
+            },
+        )
 
     async def close(self) -> None:
         await self._client.aclose()
 
     async def search_tours(self) -> List[Tour]:
         """
-        Ищет прямые перелёты Москва → Паттайя на весь март 2026 года
-        с длительностью пребывания от min_nights до max_nights.
+        Ищет прямые перелёты Москва → Паттайя (UTP) на весь март 2026 года.
+        Travelpayouts возвращает цены по датам вылета, мы дополнительно
+        фильтруем по длительности пребывания (ночей) и прямым рейсам.
         """
 
-        # Диапазон дат вылета: весь март 2026
         date_from = date(2026, 3, 1)
         date_to = date(2026, 3, 31)
 
         params = {
-            "fly_from": "MOW",  # Москва
-            "fly_to": "UTP",  # U-Tapao (аэропорт рядом с Паттайей)
-            "date_from": date_from.strftime("%d/%m/%Y"),
-            "date_to": date_to.strftime("%d/%m/%Y"),
-            "nights_in_dst_from": self._config.min_nights,
-            "nights_in_dst_to": self._config.max_nights,
-            "direct_flights": 1 if self._config.direct_only else 0,
-            "curr": "RUB",
-            "partner": "picky",  # публичный демо-партнёр Kiwi
-            "limit": 20,
-            "sort": "price",
+            "origin": "MOW",  # Москва
+            "destination": "UTP",  # U-Tapao (Паттайя)
+            "departure_at": f"{date_from:%Y-%m-%d}:{date_to:%Y-%m-%d}",
+            "one_way": "false",
+            "direct": "true" if self._config.direct_only else "false",
+            "limit": 30,
         }
+
+        if self._config.direct_only:
+            # 0 пересадок
+            params["max_stopovers"] = 0
 
         resp = await self._client.get(self.BASE_URL, params=params)
         resp.raise_for_status()

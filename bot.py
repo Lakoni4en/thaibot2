@@ -57,8 +57,8 @@ async def main() -> None:
             tours = await lt_client.search_tours()
         except Exception as exc:
             await message.answer(
-                "Не удалось получить данные с Level Travel. "
-                "Проверьте API-ключ и параметры в конфигурации.\n"
+                "Не удалось получить данные о перелётах из внешнего API. "
+                "Проверьте KIWI_API_KEY и параметры в конфигурации.\n"
                 f"<code>{exc}</code>"
             )
             return
