@@ -92,12 +92,12 @@ class LevelTravelClient:
                     currency = "RUB"
 
                     depart_date_str = f.get("depart_date")
-                    return_at_str = f.get("return_at")  # формат YYYY-MM-DDTHH:MM:SSZ
-                    if not depart_date_str or not return_at_str:
+                    return_date_str = f.get("return_date")  # формат YYYY-MM-DD
+                    if not depart_date_str or not return_date_str:
                         continue
 
                     depart_d = date.fromisoformat(depart_date_str)
-                    return_d = date.fromisoformat(return_at_str[:10])
+                    return_d = date.fromisoformat(return_date_str)
                     nights = (return_d - depart_d).days
                     if nights <= 0:
                         continue
