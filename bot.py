@@ -38,7 +38,7 @@ async def main() -> None:
     async def cmd_start(message: Message) -> None:
         text = (
             "Привет! 👋\n\n"
-            "Я бот, который ищет перелёты/туры в Паттайю из Москвы через Aviasales (Travelpayouts).\n"
+            "Я бот, который ищет перелёты из Москвы через Aviasales (Travelpayouts).\n"
             f"Фильтр вшит в код: от <b>{config.min_nights}</b> до "
             f"<b>{config.max_nights}</b> ночей, только <b>прямые рейсы</b>,\n"
             "и поиск идёт по всем датам <b>марта 2026 года</b>.\n\n"
@@ -49,7 +49,7 @@ async def main() -> None:
     @dp.message(Command("tours"))
     async def cmd_tours(message: Message) -> None:
         await message.answer(
-            "Ищу подходящие перелёты в Паттайю за весь март 2026 через Aviasales.\n"
+            f"Ищу перелёты {config.origin_city_code} → {config.destination_city_code} за март 2026 через Aviasales.\n"
             "Это может занять до минуты, подождите…"
         )
 

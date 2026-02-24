@@ -30,7 +30,8 @@ def get_config() -> BotConfig:
         raise RuntimeError("Не задан AVIASALES_TOKEN в .env или переменных окружения")
 
     origin = os.getenv("ORIGIN_CITY_CODE", "MOW")
-    destination = os.getenv("DESTINATION_CITY_CODE", "UTP")
+    # Для Паттайи чаще используют Бангкок (BKK) как аэропорт прилёта.
+    destination = os.getenv("DESTINATION_CITY_CODE", "BKK")
 
     min_nights = int(os.getenv("MIN_NIGHTS", "10"))
     max_nights = int(os.getenv("MAX_NIGHTS", "15"))
