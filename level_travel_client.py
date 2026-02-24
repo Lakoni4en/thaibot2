@@ -72,11 +72,9 @@ class LevelTravelClient:
             "one_way": "false",
             "direct": "true" if self._config.direct_only else "false",
             "limit": 30,
+            # Aviasales/Travelpayouts также принимает токен как query-параметр `token`
+            "token": self._config.aviasales_token,
         }
-
-        if self._config.direct_only:
-            # 0 пересадок
-            params["max_stopovers"] = 0
 
         resp = await self._client.get(self.BASE_URL, params=params)
         resp.raise_for_status()
